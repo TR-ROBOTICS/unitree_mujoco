@@ -3,6 +3,8 @@ import numpy as np
 import pygame
 import sys
 import struct
+import time
+import threading
 
 from unitree_sdk2py.core.channel import ChannelSubscriber, ChannelPublisher
 
@@ -107,6 +109,29 @@ class UnitreeSdk2Bridge:
             "down": 14,
             "left": 15,
         }
+
+        # External virtual controller input (for virtual_gamepad.py)
+        self.elastic_band = None
+        self._ext_controller = None
+        self._ext_controller_time = 0
+        self._ext_lock = threading.Lock()
+        self._ext_controller_suber = ChannelSubscriber(
+            "rt/wirelesscontroller/cmd", WirelessController_
+        )
+        self._ext_controller_suber.Init(self._ExtControllerHandler, 10)
+
+    def _ExtControllerHandler(self, msg: WirelessController_):
+        with self._ext_lock:
+            self._ext_controller = msg
+            self._ext_controller_time = time.time()
+            # Handle elastic band commands via F1/F2/A keys in special mode
+            if self.elastic_band is not None:
+                if msg.keys & (1 << self.key_map["F1"]):  # F1 = increase length (lower)
+                    self.elastic_band.length += 0.1
+                if msg.keys & (1 << self.key_map["F2"]):  # F2 = decrease length (raise)
+                    self.elastic_band.length -= 0.1
+                if msg.keys & (1 << self.key_map["select"]):  # select = toggle band
+                    self.elastic_band.enable = not self.elastic_band.enable
 
     def LowCmdHandler(self, msg: LowCmd_):
         if self.mj_data != None:
@@ -220,6 +245,26 @@ class UnitreeSdk2Bridge:
                 self.low_state.wireless_remote[12:16] = packs[2]
                 self.low_state.wireless_remote[20:24] = packs[3]
 
+            elif self._ext_controller is not None:
+                with self._ext_lock:
+                    ext = self._ext_controller
+                    fresh = (time.time() - self._ext_controller_time) < 1.0
+                if fresh:
+                    keys = ext.keys
+                    self.low_state.wireless_remote[2] = keys & 0xFF
+                    self.low_state.wireless_remote[3] = (keys >> 8) & 0xFF
+                    sticks = [ext.lx, ext.rx, ext.ry, ext.ly]
+                    packs = list(map(lambda x: struct.pack("f", x), sticks))
+                    self.low_state.wireless_remote[4:8] = packs[0]
+                    self.low_state.wireless_remote[8:12] = packs[1]
+                    self.low_state.wireless_remote[12:16] = packs[2]
+                    self.low_state.wireless_remote[20:24] = packs[3]
+                else:
+                    self.low_state.wireless_remote[2] = 0
+                    self.low_state.wireless_remote[3] = 0
+                    for off in [4, 8, 12, 20]:
+                        self.low_state.wireless_remote[off:off+4] = struct.pack("f", 0.0)
+
             self.low_state_puber.Write(self.low_state)
 
     def PublishHighState(self):
@@ -291,6 +336,18 @@ class UnitreeSdk2Bridge:
             self.wireless_controller.ry = -self.joystick.get_axis(self.axis_id["RY"])
 
             self.wireless_controller_puber.Write(self.wireless_controller)
+
+        elif self._ext_controller is not None:
+            with self._ext_lock:
+                ext = self._ext_controller
+                fresh = (time.time() - self._ext_controller_time) < 1.0
+            if fresh:
+                self.wireless_controller.keys = ext.keys
+                self.wireless_controller.lx = ext.lx
+                self.wireless_controller.ly = ext.ly
+                self.wireless_controller.rx = ext.rx
+                self.wireless_controller.ry = ext.ry
+                self.wireless_controller_puber.Write(self.wireless_controller)
 
     def SetupJoystick(self, device_id=0, js_type="xbox"):
         pygame.init()

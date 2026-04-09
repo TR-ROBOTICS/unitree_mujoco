@@ -40,6 +40,8 @@ def SimulationThread():
 
     ChannelFactoryInitialize(config.DOMAIN_ID, config.INTERFACE)
     unitree = UnitreeSdk2Bridge(mj_model, mj_data)
+    if config.ENABLE_ELASTIC_BAND:
+        unitree.elastic_band = elastic_band
 
     if config.USE_JOYSTICK:
         unitree.SetupJoystick(device_id=0, js_type=config.JOYSTICK_TYPE)
