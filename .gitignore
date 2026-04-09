@@ -4,3 +4,5 @@
 **/log/
 **/install/
 simulate/mujoco
+*.tar.gz
+**/MUJOCO_LOG.TXT
