@@ -144,6 +144,29 @@ class VirtualGamepad:
             self._keys = 0
         time.sleep(0.1)
 
+    # ── Arm pose commands ──
+    # LB = L1 (your naming), RB = R1 (your naming)
+
+    def arm_left_up(self):
+        """LB + up → lift left arm to 1.57 rad."""
+        print("  [LB+Up] Lift left arm")
+        self.send_button_combo(hold=L1, trigger=UP, hold_time=0.1, trigger_time=0.15)
+
+    def arm_left_down(self):
+        """LB + down → lower left arm to 0.0 rad."""
+        print("  [LB+Down] Lower left arm")
+        self.send_button_combo(hold=L1, trigger=DOWN, hold_time=0.1, trigger_time=0.15)
+
+    def arm_right_up(self):
+        """RB + up → lift right arm to 1.57 rad."""
+        print("  [RB+Up] Lift right arm")
+        self.send_button_combo(hold=R1, trigger=UP, hold_time=0.1, trigger_time=0.15)
+
+    def arm_right_down(self):
+        """RB + down → lower right arm to 0.0 rad."""
+        print("  [RB+Down] Lower right arm")
+        self.send_button_combo(hold=R1, trigger=DOWN, hold_time=0.1, trigger_time=0.15)
+
     # ── Velocity axes ──
 
     def set_velocity(self, ly=None, lx=None, rx=None):
@@ -183,6 +206,12 @@ Velocity (while in Velocity mode):
   vx <val>       set forward velocity directly
   vy <val>       set lateral velocity directly
   vyaw <val>     set yaw rate directly
+
+Arm pose (toggle, holds until opposite command):
+  lu             LB+Up   : lift left arm
+  ld             LB+Down : lower left arm
+  ru             RB+Up   : lift right arm
+  rd             RB+Down : lower right arm
 
 Other:
   help           show this help
@@ -298,6 +327,19 @@ def main():
 
             elif c == "help":
                 print_help()
+
+            # ── Arm pose ──
+            elif c == "lu":
+                gp.arm_left_up()
+
+            elif c == "ld":
+                gp.arm_left_down()
+
+            elif c == "ru":
+                gp.arm_right_up()
+
+            elif c == "rd":
+                gp.arm_right_down()
 
             elif c in ("quit", "exit"):
                 break
