@@ -9,7 +9,7 @@ JOYSTICK_TYPE = "xbox" # support "xbox" and "switch" gamepad layout
 JOYSTICK_DEVICE = 0 # Joystick number
 
 PRINT_SCENE_INFORMATION = True # Print link, joint and sensors information of robot
-ENABLE_ELASTIC_BAND = True # Virtual spring band, used for lifting h1
+ENABLE_ELASTIC_BAND = False # G1 has pelvis welded via equality constraints; no crane band needed
 
 SIMULATE_DT = 0.005  # Need to be larger than the runtime of viewer.sync()
 VIEWER_DT = 0.02  # 50 fps for viewer

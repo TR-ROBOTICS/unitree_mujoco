@@ -8,6 +8,7 @@
 #include <unitree/dds_wrapper/robots/g1/g1.h>
 #include <unitree/idl/hg/BmsState_.hpp>
 #include <unitree/idl/hg/IMUState_.hpp>
+#include <unitree/idl/ros2/Point_.hpp>
 
 #include <iostream>
 
@@ -273,6 +274,17 @@ public:
         bmsstate->msg_.soc() = 100;
 
         secondary_imustate = std::make_unique<IMUState_t>("rt/secondary_imu");
+
+        // Valve angle side-channel (sim2sim valve-turn): the valve hinge is a
+        // passive joint (no actuator) so it never appears in motor_state. Publish
+        // its qpos so State_ValveTurn can compute p_now = g(theta). Sim-only — the
+        // real robot reads pressure off the gauge via vision.
+        int valve_jid = mj_name2id(mj_model_, mjOBJ_JOINT, "valve_joint");
+        if (valve_jid >= 0) {
+            valve_qpos_adr_ = mj_model_->jnt_qposadr[valve_jid];
+            valvestate = std::make_unique<ValveState_t>("rt/valve/angle");
+            spdlog::info("[bridge] valve_joint found (qpos_adr={}), publishing theta on rt/valve/angle", valve_qpos_adr_);
+        }
     }
 
     void run() override
@@ -314,10 +326,21 @@ public:
 
         // In practice, bmsstate is sent at a low frequency; here it is sent with the main loop
         bmsstate->unlockAndPublish();
+
+        // valve angle (theta, rad) on .x() — see ctor
+        if (valve_qpos_adr_ >= 0 && valvestate && valvestate->trylock()) {
+            valvestate->msg_.x() = mj_data_->qpos[valve_qpos_adr_];
+            valvestate->msg_.y() = 0.0;
+            valvestate->msg_.z() = 0.0;
+            valvestate->unlockAndPublish();
+        }
     }
 
     using BmsState_t = unitree::robot::RealTimePublisher<unitree_hg::msg::dds_::BmsState_>;
     using IMUState_t = unitree::robot::RealTimePublisher<unitree_hg::msg::dds_::IMUState_>;
+    using ValveState_t = unitree::robot::RealTimePublisher<geometry_msgs::msg::dds_::Point_>;
     std::unique_ptr<BmsState_t> bmsstate;
     std::unique_ptr<IMUState_t> secondary_imustate;
+    std::unique_ptr<ValveState_t> valvestate;
+    int valve_qpos_adr_ = -1;
 };

@@ -632,7 +632,12 @@ void user_key_cb(GLFWwindow* window, int key, int scancode, int act, int mods) {
       }
     }
     if(key==GLFW_KEY_BACKSPACE) {
-      mj_resetData(m, d);
+      int pregrip_id = mj_name2id(m, mjOBJ_KEY, "pregrip");
+      if (pregrip_id >= 0) {
+        mj_resetDataKeyframe(m, d, pregrip_id);
+      } else {
+        mj_resetData(m, d);
+      }
       mj_forward(m, d);
     }
   }

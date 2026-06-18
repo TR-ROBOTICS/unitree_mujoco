@@ -6,3 +6,5 @@
 simulate/mujoco
 *.tar.gz
 **/MUJOCO_LOG.TXT
+# editor/scratch backups
+*.bak

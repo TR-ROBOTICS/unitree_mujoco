@@ -1,5 +1,9 @@
 <mujoco model="g1_29dof scene">
+
+  <option timestep="0.005" gravity="0 0 -9.81" integrator="implicitfast"/>
+
   <include file="g1_29dof.xml"/>
+  <include file="valve.xml"/>
 
   <statistic center="0 0 0.5" extent="2.0"/>
 
@@ -20,4 +24,36 @@
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
   </worldbody>
+
+  <!-- Crane-hang: pelvis is welded in g1_29dof.xml; lock legs + waist at the
+       dev pose (qpos=0) so the lower body stays rigid, matching the fixed
+       lower body used in IsaacLab training. -->
+  <equality>
+    <joint joint1="left_hip_pitch_joint"/>
+    <joint joint1="left_hip_roll_joint"/>
+    <joint joint1="left_hip_yaw_joint"/>
+    <joint joint1="left_knee_joint"/>
+    <joint joint1="left_ankle_pitch_joint"/>
+    <joint joint1="left_ankle_roll_joint"/>
+    <joint joint1="right_hip_pitch_joint"/>
+    <joint joint1="right_hip_roll_joint"/>
+    <joint joint1="right_hip_yaw_joint"/>
+    <joint joint1="right_knee_joint"/>
+    <joint joint1="right_ankle_pitch_joint"/>
+    <joint joint1="right_ankle_roll_joint"/>
+    <joint joint1="waist_yaw_joint"/>
+    <joint joint1="waist_roll_joint"/>
+    <joint joint1="waist_pitch_joint"/>
+  </equality>
+
+  <!-- Pre-grip pose (Option-X / ADR 0011): 14 arm joints + 24 finger grip
+       (= finger spring equilibria) + valve theta=9.42. ctrl holds the 14 arm
+       position actuators at the pre-grip targets so the pose survives "Run" in
+       the native viewer. Restore via Reset / Load key in the viewer, or
+       mj_resetDataKeyframe in scripts. -->
+  <keyframe>
+    <key name="pregrip"
+         qpos="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -0.761 0.1937 -0.1239 0.4869 0.3787 0 0 1.0524 0.2496 0.3037 0.5149 0.6667 0.7278 0.7278 1.1362 0.6056 1.0751 0.6056 0.6266 -0.761 -0.1937 0.1257 0.5236 -0.4712 0 0 1.299 0.3089 0.5917 0.644 0.5044 1.0542 0.6266 1.0943 0.9111 0.6877 0.7889 0.5044 9.42"
+         ctrl="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -0.761 0.1937 -0.1239 0.4869 0.3787 0 0 -0.761 -0.1937 0.1257 0.5236 -0.4712 0 0"/>
+  </keyframe>
 </mujoco>

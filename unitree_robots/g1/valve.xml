@@ -1,0 +1,195 @@
+<!--
+  valve.xml — single-revolute handwheel for G1 valve-turn sim2sim.
+
+  Geometry: real KIPP K1875 handwheel mesh extracted from Isaac USD
+  (valve_rig.usd mesh "mesh_50_AL_250_B7_8_A_stl", 89139 verts / 178105 tris).
+  Mesh is in local mm coords; scale="0.0008 0.0008 0.0008" = 0.08 * 0.01 (USD chain).
+
+  Isaac parity:
+    Valve rig spawned at (0.60, 0.0, 0.90) world + rot=(0.707,0,0,0.707) wxyz = +90°Z.
+    MJCF body pos/quat matches exactly.
+    Hinge axis "0 0 1" in body frame (rotated 90°Z from world) = revolution around world Z.
+    RevoluteJoint in Isaac is axis=Z in joint frame; joint localRot0=(0.707107,0.707107,0,0)
+    wxyz rotates joint Z to -Y in body0, which in world (after 90°Z body) = world Z.
+    Both agree: wheel spins around world Z (horizontal wheel, steering-wheel orientation).
+
+  Mesh orientation in USD:
+    Mesh local: flat in XY (bbox x=[-125,125], y=[-125,125], z=[-52,-2] mm).
+    USD applies: orient(90°X), scale(0.08), rotateX(90°), scale(0.01).
+    Net rotation = 180° around X (two 90°X = 180°X) which flips the disk upside-down,
+    keeping it in XY plane. So wheel face is horizontal in world frame.
+    MJCF: mesh geom euler="3.14159 0 0" (180°X) applied to the handwheel visual geom
+    to match USD orientation. Collision uses separate primitive (box torus) — mesh is
+    visual-only (contype=0 conaffinity=0) because no convex decomp available in env.
+
+  Joint name: valve_joint (load-bearing in test suite — do NOT rename).
+  Joint range: unrestricted (continuous rotation).
+  Damping: 1.0 N·m·s/rad (matches Isaac drive:angular:damping=100 in USD
+  after unit conversion from USD SI: 100 → 1.0? USD damping is in SI but field
+  is raw; keeping 1.0 as tuned value from prior commits).
+
+  p_now sensor (in runner wrapper, not XML):
+    p_now = clamp(4.527 * theta - 27.66, 15, 200)  [PSI]
+  Runner reads: data.joint("valve_joint").qpos[0]  → θ (rad)
+
+  θ_init: runner MUST set data.joint("valve_joint").qpos[0] = 9.42 at reset.
+-->
+<mujoco model="valve_rig">
+  <!-- No meshdir here: when included into a scene, a second <compiler meshdir>
+       overrides g1_29dof.xml's meshdir="meshes/" for the WHOLE merged model and
+       robot STLs stop resolving. Valve mesh path is relative to that meshdir. -->
+  <compiler angle="radian"/>
+
+  <asset>
+    <!--
+      Handwheel mesh: extracted from valve_rig.usd (mesh_50_AL_250_B7_8_A_stl).
+      Local coords in mm. Scale 0.0008 = 0.08*0.01 (USD xform chain).
+      Result: ~0.20 m diameter flat disk.
+    -->
+    <mesh name="handwheel" file="../meshes_valve/handwheel.STL" scale="0.0008 0.0008 0.0008"/>
+    <!--
+      valve_body (casing): the static valve body behind the handwheel. Extracted
+      from the same valve_rig.usd (valve_model prim) → same USD xform chain →
+      same scale 0.0008. Mesh-local bbox (mm): x=[-35,35], y=[-38,125], z=[-35,35]
+      → scaled 0.056 x 0.131 x 0.056 m. The long axis is mesh-local Y; it is the
+      stem/body that mounts coaxially with the wheel hub.
+    -->
+    <mesh name="valve_body" file="../meshes_valve/valve_body.STL" scale="0.0008 0.0008 0.0008"/>
+  </asset>
+
+  <worldbody>
+    <!--
+      valve_base: fixed body at Isaac spawn pose.
+      pos=(0.60, 0.0, 0.90): matches Isaac task init_state pos.
+      quat=(0.6294,-0.3222,0.6294,-0.3222) wxyz: the *full* world orientation of
+      the spinning hub, dumped from the RUNNING Isaac sim (Unitree-G1-29dof-
+      ValveTurn-v5). The task init_state rot=(0.707,0,0,0.707) is only the root
+      xform; the USD internal hierarchy adds the rest, so the rendered wheel is
+      VERTICAL, not horizontal.  This quat maps local Z (the wheel normal / hinge
+      axis) -> world X, putting the rim circle in the world YZ plane facing the
+      robot, with left/right edges at world (0.60, +-0.09, 0.90) — i.e. the
+      Isaac reach targets (0.60, +-0.10, 0.922).  All child geometry below is
+      authored in the wheel-local frame (rim in local XY, normal local Z) and
+      rotates rigidly with this quat.
+      (Supersedes the earlier "+90 Z / horizontal" claim — that was wrong; see
+       memory project_pose_parity_valve_orientation, fix #2.)
+    -->
+    <body name="valve_base" pos="0.60 0.0 0.90" quat="0.6294 -0.3222 0.6294 -0.3222">
+
+      <!--
+        valve_casing: STATIC valve body (does NOT spin — sits on valve_base, not
+        valve_wheel). The wheel spin axis = wheel-local Z = world X (away from the
+        robot). The casing's long axis is its own mesh-local Y, so euler 90 deg
+        about X maps that long axis onto local Z (the stem/spin axis) → the body
+        extends BEHIND the wheel (world +X, away from robot), grounding it instead
+        of floating. Concentric with the hub (cross-section centred). Visual-only:
+        contype=0 conaffinity=0 group=1, density=0 (mass carried by wheel/hub).
+        (Fixes the orphaned valve_body.STL — memory project_pose_parity_valve_orientation #3.)
+      -->
+      <geom name="valve_casing" type="mesh" mesh="valve_body"
+            pos="0 0 0" euler="-1.5708 0 0"
+            contype="0" conaffinity="0" group="1"
+            rgba="0.40 0.42 0.46 1" density="0"/>
+
+      <!-- valve_wheel: spinning body, joint about local Z = world X (vertical wheel).
+           pos="0 0 -0.08": the handwheel is mounted on the STEM TIP, not buried at
+           the body hub. valve_casing stem (after the -90 deg X flip) points toward
+           the robot (world -X) with its tip at world x~0.50; the body bulk sits
+           behind at x~0.63. Local +Z = world +X (away from robot), so -0.08 shifts
+           the whole spinning wheel toward the robot to world x~0.51 — on the stem.
+           NOTE: this moves the rim OFF the Isaac valve-spawn plane (x=0.60); the
+           handwheel no longer matches the Isaac hub X (sim2sim parity for valve
+           X-position is intentionally broken here per user direction — wheel-on-stem
+           is the physically-correct mount). See memory project_pose_parity_valve_orientation. -->
+      <body name="valve_wheel" pos="0 0 -0.1">
+        <joint name="valve_joint" type="hinge" axis="0 0 1"
+               damping="1.0" frictionloss="0.0" stiffness="0.0"
+               limited="true" range="9.42 50.27"/>
+
+        <!--
+          Handwheel visual mesh.
+          Mesh is flat in XY (USD local); USD applies net 180°X rotation.
+          euler="3.14159 0 0" replicates that, keeping wheel flat/horizontal.
+          contype=0 conaffinity=0: visual only — no convex decomp available here.
+          pos="0 0 0.022": handwheel mesh z-center is ~22mm above the joint origin
+          (mesh bbox z = [-52,-2]mm * 0.0008 = [-0.0416,-0.0016]m, center=-0.0216m;
+           but after 180°X flip the z coords negate: center becomes +0.0216m ≈ 0.022m).
+        -->
+        <!--
+          Mesh local bbox (mm): x=[-125,125], y=[-125,125], z=[-52,-2].
+          After scale 0.0008: z=[-0.042,-0.0016], center z=-0.022m relative to wheel origin.
+          Shift +0.022 in z so wheel sits symmetrically around wheel body origin.
+          No euler rotation needed: disk is already flat in valve_base local XY plane,
+          matching Isaac (wheel face normal = world -Z after 180°X net USD rotation).
+        -->
+        <geom name="handwheel_visual" type="mesh" mesh="handwheel"
+              pos="0 0 0.022"
+              contype="0" conaffinity="0" group="1"
+              rgba="0.55 0.55 0.60 1" density="0"/>
+
+        <!--
+          Collision geometry: box-torus approximation aligned to the mesh rim.
+          Mesh rim measured from vertices: centerline radius 0.090 m, tube
+          radius 0.0104 m, ring center at body-local z=-0.009 (world 0.8906).
+          8 cylinders (r=0.012) tangent to that circle. All primitives are
+          collision-only (alpha=0); the mesh is the only visible wheel.
+        -->
+        <!-- seg 0: angle=0    pos=(0.000,  0.100) -->
+        <geom name="rim_0" type="cylinder" size="0.012 0.020"
+              pos="0.000  0.090 -0.009" euler="0 1.5708 0"
+              rgba="0.7 0.15 0.15 0" mass="0.08"/>
+        <!-- seg 1: angle=45   pos=(0.0707, 0.0707) -->
+        <geom name="rim_1" type="cylinder" size="0.012 0.020"
+              pos="0.0636  0.0636 -0.009" euler="0 1.5708 0.7854"
+              rgba="0.7 0.15 0.15 0" mass="0.08"/>
+        <!-- seg 2: angle=90   pos=(0.100,  0.000) -->
+        <geom name="rim_2" type="cylinder" size="0.012 0.020"
+              pos="0.090  0.000 -0.009" euler="1.5708 0 0"
+              rgba="0.7 0.15 0.15 0" mass="0.08"/>
+        <!-- seg 3: angle=135  pos=(0.0707,-0.0707) -->
+        <geom name="rim_3" type="cylinder" size="0.012 0.020"
+              pos="0.0636 -0.0636 -0.009" euler="0 1.5708 2.3562"
+              rgba="0.7 0.15 0.15 0" mass="0.08"/>
+        <!-- seg 4: angle=180  pos=(0.000, -0.100) -->
+        <geom name="rim_4" type="cylinder" size="0.012 0.020"
+              pos="0.000 -0.090 -0.009" euler="0 1.5708 0"
+              rgba="0.7 0.15 0.15 0" mass="0.08"/>
+        <!-- seg 5: angle=225  pos=(-0.0707,-0.0707) -->
+        <geom name="rim_5" type="cylinder" size="0.012 0.020"
+              pos="-0.0636 -0.0636 -0.009" euler="0 1.5708 0.7854"
+              rgba="0.7 0.15 0.15 0" mass="0.08"/>
+        <!-- seg 6: angle=270  pos=(-0.100,  0.000) -->
+        <geom name="rim_6" type="cylinder" size="0.012 0.020"
+              pos="-0.090  0.000 -0.009" euler="1.5708 0 0"
+              rgba="0.7 0.15 0.15 0" mass="0.08"/>
+        <!-- seg 7: angle=315  pos=(-0.0707, 0.0707) -->
+        <geom name="rim_7" type="cylinder" size="0.012 0.020"
+              pos="-0.0636  0.0636 -0.009" euler="0 1.5708 2.3562"
+              rgba="0.7 0.15 0.15 0" mass="0.08"/>
+
+        <!-- Hub collision cylinder -->
+        <geom name="valve_hub" type="cylinder" size="0.035 0.015"
+              pos="0 0 0.005"
+              rgba="0.35 0.35 0.40 0" mass="0.5"/>
+
+        <!--
+          Spokes: 4 box beams.
+        -->
+        <geom name="spoke_0" type="box" size="0.006 0.006 0.085"
+              pos="0.000  0.052 -0.006" euler="0 1.5708 0"
+              rgba="0.5 0.5 0.55 0" mass="0.03"/>
+        <geom name="spoke_1" type="box" size="0.006 0.006 0.085"
+              pos="0.052  0.000 -0.006" euler="1.5708 0 0"
+              rgba="0.5 0.5 0.55 0" mass="0.03"/>
+        <geom name="spoke_2" type="box" size="0.006 0.006 0.085"
+              pos="0.000 -0.052 -0.006" euler="0 1.5708 0"
+              rgba="0.5 0.5 0.55 0" mass="0.03"/>
+        <geom name="spoke_3" type="box" size="0.006 0.006 0.085"
+              pos="-0.052  0.000 -0.006" euler="1.5708 0 0"
+              rgba="0.5 0.5 0.55 0" mass="0.03"/>
+
+      </body><!-- valve_wheel -->
+    </body><!-- valve_base -->
+  </worldbody>
+
+</mujoco>
