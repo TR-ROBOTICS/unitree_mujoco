@@ -68,13 +68,19 @@ _MJCF_DIR = _REPO_ROOT / "src/unitree_mujoco/unitree_robots/g1"
 SCENE_XML = str(_MJCF_DIR / "scene_29dof.xml")
 
 _RL_ROOT = _REPO_ROOT / "src/unitree_rl_lab"
-TURN_POLICY_PT = str(
-    _RL_ROOT
-    / "logs/rsl_rl/valve_turn_g1_29dof/2026-05-27_17-08-10/exported/policy.pt"
+TURN_POLICY_PT = os.environ.get(
+    "TURN_POLICY_PT",
+    str(
+        _RL_ROOT
+        / "logs/rsl_rl/valve_turn_g1_29dof/2026-06-10_15-36-35_v5_i/exported/policy.pt"
+    ),
 )
-REACH_POLICY_PT = str(
-    _RL_ROOT
-    / "logs/rsl_rl/valve_reach_g1_29dof/2026-05-27_10-40-12/exported/policy.pt"
+REACH_POLICY_PT = os.environ.get(
+    "REACH_POLICY_PT",
+    str(
+        _RL_ROOT
+        / "logs/rsl_rl/valve_reach_g1_29dof/saved_models/exported/reach_policy.pt"
+    ),
 )
 REACH_DATASET_NPY = str(
     _RL_ROOT

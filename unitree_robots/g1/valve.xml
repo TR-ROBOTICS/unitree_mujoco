@@ -40,6 +40,24 @@
        robot STLs stop resolving. Valve mesh path is relative to that meshdir. -->
   <compiler angle="radian"/>
 
+  <!--
+    sim2sim contact-parity tuning (2026-06-22):
+    Rim geoms inherit class="valve_rim".
+    DIAGNOSTIC TEST (2026-06-22, ADR-pending): friction raised to maximum
+    physically credible values (slide=5 torsional=1.0 rolling=0.5) to isolate
+    whether hand↔rim friction is a co-blocker.  This is NOT a physical value;
+    it is a deliberate sim2sim diagnostic.  If the wheel still does not turn
+    with these values AND a frictionless joint, the gap is missing palm contact
+    geometry (hands pass through rim), not friction.
+    Do NOT tune further to mask unrelated Isaac-side bugs (CONTEXT.md §Sim2real protocol).
+    Previous value: friction="3 0.1 0.01"
+  -->
+  <default>
+    <default class="valve_rim">
+      <geom friction="5 1.0 0.5"/>
+    </default>
+  </default>
+
   <asset>
     <!--
       Handwheel mesh: extracted from valve_rig.usd (mesh_50_AL_250_B7_8_A_stl).
@@ -102,8 +120,32 @@
            X-position is intentionally broken here per user direction — wheel-on-stem
            is the physically-correct mount). See memory project_pose_parity_valve_orientation. -->
       <body name="valve_wheel" pos="0 0 -0.1">
+        <!--
+          DIAGNOSTIC TEST (2026-06-22, ADR-pending): valve_joint set to
+          frictionless / undamped to isolate joint resistance as a co-blocker.
+          Original: damping="1.0" frictionloss="0.0" stiffness="0.0"
+          If wheel turns with these values + perfect friction + pinned hands,
+          joint resistance (damping=1.0) was a co-blocker.
+          If wheel STILL does not turn, gap is missing palm contact geometry.
+          WARNING: frictionless joint will NOT self-hold after turn completes;
+          position only maintained by hand contact force.
+          Do NOT commit as final without ADR review.
+        -->
+        <!--
+          sim2sim joint resistance (2026-06-22, ADR-pending):
+          frictionloss=2.0 N·m — Coulomb/dry friction; provides static hold when
+          policy eases off (damping alone cannot hold a static angle).
+          damping=0.5 N·m·s/rad — small viscous term to damp oscillation.
+          Value chosen from empirical sweep {0.5, 1.0, 2.0} N·m (same session):
+            fl=0.5: delta_theta=2.66 rad (FAIL turn), coast_back=2.49 rad (hold OK)
+            fl=1.0: delta_theta=3.76 rad (FAIL turn), coast_back=3.93 rad (FAIL hold)
+            fl=2.0: delta_theta=25.66 rad (PASS turn), coast_back=0.00 rad (PASS hold)
+          Policy (iter-1200, v7_palmcaps) overcomes 2.0 N·m frictionloss comfortably
+          (+25.66 rad vs +18.78 rad target). Lowest frictionloss passing both gates.
+          Do NOT lower without re-running the sweep + new ADR sign-off.
+        -->
         <joint name="valve_joint" type="hinge" axis="0 0 1"
-               damping="1.0" frictionloss="0.0" stiffness="0.0"
+               damping="0.5" frictionloss="2.0" stiffness="0.0"
                limited="true" range="9.42 50.27"/>
 
         <!--
@@ -135,35 +177,35 @@
           collision-only (alpha=0); the mesh is the only visible wheel.
         -->
         <!-- seg 0: angle=0    pos=(0.000,  0.100) -->
-        <geom name="rim_0" type="cylinder" size="0.012 0.020"
+        <geom name="rim_0" class="valve_rim" type="cylinder" size="0.012 0.020"
               pos="0.000  0.090 -0.009" euler="0 1.5708 0"
               rgba="0.7 0.15 0.15 0" mass="0.08"/>
         <!-- seg 1: angle=45   pos=(0.0707, 0.0707) -->
-        <geom name="rim_1" type="cylinder" size="0.012 0.020"
+        <geom name="rim_1" class="valve_rim" type="cylinder" size="0.012 0.020"
               pos="0.0636  0.0636 -0.009" euler="0 1.5708 0.7854"
               rgba="0.7 0.15 0.15 0" mass="0.08"/>
         <!-- seg 2: angle=90   pos=(0.100,  0.000) -->
-        <geom name="rim_2" type="cylinder" size="0.012 0.020"
+        <geom name="rim_2" class="valve_rim" type="cylinder" size="0.012 0.020"
               pos="0.090  0.000 -0.009" euler="1.5708 0 0"
               rgba="0.7 0.15 0.15 0" mass="0.08"/>
         <!-- seg 3: angle=135  pos=(0.0707,-0.0707) -->
-        <geom name="rim_3" type="cylinder" size="0.012 0.020"
+        <geom name="rim_3" class="valve_rim" type="cylinder" size="0.012 0.020"
               pos="0.0636 -0.0636 -0.009" euler="0 1.5708 2.3562"
               rgba="0.7 0.15 0.15 0" mass="0.08"/>
         <!-- seg 4: angle=180  pos=(0.000, -0.100) -->
-        <geom name="rim_4" type="cylinder" size="0.012 0.020"
+        <geom name="rim_4" class="valve_rim" type="cylinder" size="0.012 0.020"
               pos="0.000 -0.090 -0.009" euler="0 1.5708 0"
               rgba="0.7 0.15 0.15 0" mass="0.08"/>
         <!-- seg 5: angle=225  pos=(-0.0707,-0.0707) -->
-        <geom name="rim_5" type="cylinder" size="0.012 0.020"
+        <geom name="rim_5" class="valve_rim" type="cylinder" size="0.012 0.020"
               pos="-0.0636 -0.0636 -0.009" euler="0 1.5708 0.7854"
               rgba="0.7 0.15 0.15 0" mass="0.08"/>
         <!-- seg 6: angle=270  pos=(-0.100,  0.000) -->
-        <geom name="rim_6" type="cylinder" size="0.012 0.020"
+        <geom name="rim_6" class="valve_rim" type="cylinder" size="0.012 0.020"
               pos="-0.090  0.000 -0.009" euler="1.5708 0 0"
               rgba="0.7 0.15 0.15 0" mass="0.08"/>
         <!-- seg 7: angle=315  pos=(-0.0707, 0.0707) -->
-        <geom name="rim_7" type="cylinder" size="0.012 0.020"
+        <geom name="rim_7" class="valve_rim" type="cylinder" size="0.012 0.020"
               pos="-0.0636  0.0636 -0.009" euler="0 1.5708 2.3562"
               rgba="0.7 0.15 0.15 0" mass="0.08"/>
 
